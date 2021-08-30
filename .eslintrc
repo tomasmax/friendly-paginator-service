@@ -1,0 +1,20 @@
+{
+  "env": {
+    "browser": true,
+    "node": true,
+    "commonjs": true,
+    "es2020": true
+  },
+  "extends": ["prettier", "standard"],
+  "globals": {
+    "Atomics": "readonly",
+    "SharedArrayBuffer": "readonly"
+  },
+  "parser": "babel-eslint",
+  "parserOptions": {
+    "ecmaVersion": 2020
+  },
+  "rules": {
+    "max-len": [2, 80, 4, {"ignoreUrls": true}]
+  }
+}

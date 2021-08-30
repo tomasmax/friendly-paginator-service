@@ -1,0 +1,41 @@
+{
+  "name": "friendly-paginator-service",
+  "version": "1.0.0",
+  "description": "NodeJS service to gather data from an old endpoint and provide it in a more configurable pagination way",
+  "main": "index.js",
+  "scripts": {
+    "lint:fix": "eslint --fix src",
+    "start": "node src/index.js",
+    "start:dev": "DEBUG=express:* nodemon --inspect src/index.js",
+    "test": "jest --collectCoverage",
+    "test:watch": "jest --watchAll"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomasmax/friendly-paginator-service.git"
+  },
+  "author": "tomasmax",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tomasmax/friendly-paginator-service.git/issues"
+  },
+  "homepage": "https://github.com/tomasmax/friendly-paginator-service.git#readme",
+  "devDependencies": {
+    "babel-eslint": "^10.1.0",
+    "eslint": "^7.32.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-config-standard": "^16.0.3",
+    "eslint-plugin-import": "^2.24.2",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^5.1.0",
+    "eslint-plugin-standard": "^5.0.0",
+    "jest": "^27.0.6",
+    "nodemon": "^2.0.12",
+    "supertest": "^6.1.6"
+  },
+  "dependencies": {
+    "axios": "^0.21.1",
+    "cors": "^2.8.5",
+    "express": "^4.17.1"
+  }
+}
