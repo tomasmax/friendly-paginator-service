@@ -21,8 +21,9 @@ const getMetaData = (pageNumber, perPage, totalItems) => {
     totalItems,
     perPage,
     page: pageNumber,
-    ...(pageNumber > 1 && { prevPageLink: `/api/v1/items?page=${prevPage}` }),
-    nextPageLink: `/api/v1/items?page=${nextPage}`
+    ...(pageNumber > 1 &&
+      { prevPageLink: `/api/v1/items?page=${prevPage}&perPage=${perPage}` }),
+    nextPageLink: `/api/v1/items?page=${nextPage}&perPage=${perPage}`
   }
   return metadata
 }
@@ -83,7 +84,7 @@ async function getItems ({
         legacyLimitItemsLimit
       )
 
-      resultItems = [...resultItems, limitItems]
+      resultItems = [...resultItems, ...limitItems]
     }
 
     if (
