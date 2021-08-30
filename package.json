@@ -9,7 +9,7 @@
     "start:dev": "DEBUG=express:* nodemon --inspect src/index.js",
     "test": "jest --collectCoverage",
     "test:debug": "node --inspect node_modules/.bin/jest --watch --no-cache --runInBand",
-    "test:watch": "jest --watchAll --inspect"
+    "test:watch": "jest --watchAll"
   },
   "repository": {
     "type": "git",
