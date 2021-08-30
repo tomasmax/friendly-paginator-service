@@ -4,7 +4,7 @@ const itemsService = require('../services/items')
 
 async function getItems (req, res, next) {
   try {
-    const items = await itemsService.getItems(req.query)
+    const items = await itemsService.getItems(req)
 
     // if (!items) {
     //   throw new NotFound()

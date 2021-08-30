@@ -2,8 +2,7 @@
 const axios = require('axios')
 
 const DEFAULT_PER_PAGE_ITEMS = 100
-
-let itemsCache
+const LEGACY_PAGINATION_URL = 'https://sf-legacy-api.vercel.app/items'
 
 const calculateOffset = (page, perPageItems) => (page - 1) * perPageItems
 const calculateLimit = (page, perPageItems) => page * perPageItems
@@ -12,9 +11,11 @@ const getOffsetLegacyPageNumber = (offset) =>
   parseInt(offset / DEFAULT_PER_PAGE_ITEMS) + 1
 
 const getLimitLegacyPageNumber = (limit) =>
-  parseInt(limit / DEFAULT_PER_PAGE_ITEMS) + 1
+  parseInt((limit - 1) / DEFAULT_PER_PAGE_ITEMS) + 1
 
-const getMetaData = (pageNumber, perPage, totalItems) => {
+const getRequestUrl = (req) => `${req.protocol}://${req.host}${req.baseUrl}`
+
+const getMetaData = (pageNumber, perPage, totalItems, requestUrl) => {
   const nextPage = pageNumber + 1
   const prevPage = pageNumber - 1
   const metadata = {
@@ -22,16 +23,15 @@ const getMetaData = (pageNumber, perPage, totalItems) => {
     perPage,
     page: pageNumber,
     ...(pageNumber > 1 &&
-      { prevPageLink: `/api/v1/items?page=${prevPage}&perPage=${perPage}` }),
-    nextPageLink: `/api/v1/items?page=${nextPage}&perPage=${perPage}`
+      { prevPageLink: `${requestUrl}?page=${prevPage}&perPage=${perPage}` }),
+    nextPageLink: `${requestUrl}?page=${nextPage}&perPage=${perPage}`
   }
   return metadata
 }
 
 const getComputedItems = (data, offset, limit) => {
   if (
-    data &&
-    data.data
+    data?.data
   ) {
     const { data: originalItemsData } = data
     const computedItems = originalItemsData.slice(offset, limit)
@@ -44,11 +44,10 @@ const getComputedItems = (data, offset, limit) => {
  * @param {number} page - page number
  * @param {number} perPage - items per page
  */
-async function getItems ({
-  page = 1,
-  perPage = DEFAULT_PER_PAGE_ITEMS
-} = {}) {
+async function getItems (req) {
   try {
+    const { page = 1, perPage = DEFAULT_PER_PAGE_ITEMS } = req.query
+
     const pageNumber = parseInt(page)
     const perPageNumber = parseInt(perPage)
 
@@ -58,26 +57,30 @@ async function getItems ({
     const legacyOffsetPageNumber = getOffsetLegacyPageNumber(offset)
     const legacyLimitPageNumber = getLimitLegacyPageNumber(limit)
 
-    const legacyPaginationOffsetResponse = await axios.get(
-      `https://sf-legacy-api.vercel.app/items?page=${legacyOffsetPageNumber}`
-    )
+    const isLimitInOtherPage = legacyLimitPageNumber !== legacyOffsetPageNumber
+
+    const [legacyPaginationOffsetResponse, legacyPaginationLimitResponse] =
+    await Promise.all([axios.get(
+      `${LEGACY_PAGINATION_URL}?page=${legacyOffsetPageNumber}`
+    ), isLimitInOtherPage
+      ? await axios.get(
+      `${LEGACY_PAGINATION_URL}?page=${legacyLimitPageNumber}`
+      )
+      : null])
 
     const { data } = legacyPaginationOffsetResponse
 
-    const offsetItems = getComputedItems(data,
-      offset,
-      limit
+    let resultItems = getComputedItems(data,
+      offset % DEFAULT_PER_PAGE_ITEMS,
+      isLimitInOtherPage ? data.data?.length : limit
     )
 
-    let resultItems = offsetItems
-    let metadata
-
-    if (legacyLimitPageNumber !== legacyOffsetPageNumber) {
+    if (legacyPaginationLimitResponse) {
+      const limitMod = limit % DEFAULT_PER_PAGE_ITEMS
       const legacyLimitItemsOffset = 0
-      const legacyLimitItemsLimit = limit % DEFAULT_PER_PAGE_ITEMS
-      const legacyPaginationLimitResponse = await axios.get(
-        `https://sf-legacy-api.vercel.app/items?page=${legacyLimitPageNumber}`
-      )
+      const legacyLimitItemsLimit =
+        limitMod === 0 ? DEFAULT_PER_PAGE_ITEMS : limitMod
+
       const limitItems = getComputedItems(
         legacyPaginationLimitResponse.data,
         legacyLimitItemsOffset,
@@ -87,12 +90,18 @@ async function getItems ({
       resultItems = [...resultItems, ...limitItems]
     }
 
+    let metadata
+
     if (
       data.metadata
     ) {
       const { metadata: originMetadata } = data
       metadata =
-        getMetaData(pageNumber, perPage, originMetadata.totalItems)
+        getMetaData(pageNumber,
+          perPage,
+          originMetadata.totalItems,
+          getRequestUrl(req)
+        )
     }
 
     const response = {

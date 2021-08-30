@@ -6,15 +6,16 @@ const server = require('../../src/server')
 const request = supertest(server)
 
 const itemsApiPath = '/api/v1/items'
-const defaultPaginationQueryParams = {
-  page: 1,
-  perPage: 20
-}
 
 describe('Controllers/items', () => {
   it('Should get items correctly paginated for {page: 1, perPage: 20}', async () => {
+    const queryParams = {
+      page: 1,
+      perPage: 20
+    }
+
     const response = await request.get(
-      `${itemsApiPath}?${querystring.stringify(defaultPaginationQueryParams)}`
+      `${itemsApiPath}?${querystring.stringify(queryParams)}`
     )
 
     expect(response.status).toBe(200)
@@ -22,7 +23,7 @@ describe('Controllers/items', () => {
 
     const { data, metadata } = response.body
 
-    expect(data.length).toBe(20)
+    expect(data.length).toBe(queryParams.perPage)
     expect(data[0].absoluteIndex).toBe(0)
     expect(data[data.length - 1].absoluteIndex).toBe(19)
 
@@ -45,7 +46,7 @@ describe('Controllers/items', () => {
 
     const { data, metadata } = response.body
 
-    expect(data.length).toBe(30)
+    expect(data.length).toBe(queryParams.perPage)
     expect(data[0].absoluteIndex).toBe(30)
     expect(data[data.length - 1].absoluteIndex).toBe(59)
 
@@ -68,7 +69,7 @@ describe('Controllers/items', () => {
 
     const { data, metadata } = response.body
 
-    expect(data.length).toBe(40)
+    expect(data.length).toBe(queryParams.perPage)
     expect(data[0].absoluteIndex).toBe(80)
     expect(data[data.length - 1].absoluteIndex).toBe(119)
 
