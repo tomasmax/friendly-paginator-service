@@ -1,8 +1,15 @@
 'use strict'
 const axios = require('axios')
+const {
+  setCache,
+  isLegacyPageInCache,
+  getCache
+} = require('../cache/inMemory')
 
 const DEFAULT_PER_PAGE_ITEMS = 100
 const LEGACY_PAGINATION_URL = 'https://sf-legacy-api.vercel.app/items'
+const OFFSET_LEGACY_PAGE_CACHE_KEY = 'offset'
+const LIMIT_LEGACY_PAGE_CACHE_KEY = 'limit'
 
 const calculateOffset = (page, perPageItems) => (page - 1) * perPageItems
 const calculateLimit = (page, perPageItems) => page * perPageItems
@@ -13,7 +20,7 @@ const getOffsetLegacyPageNumber = (offset) =>
 const getLimitLegacyPageNumber = (limit) =>
   parseInt((limit - 1) / DEFAULT_PER_PAGE_ITEMS) + 1
 
-const getRequestUrl = (req) => `${req.protocol}://${req.host}${req.baseUrl}`
+const getRequestUrl = (req) => `${req.protocol}://${req.hostname}${req.baseUrl}`
 
 const getMetaData = (pageNumber, perPage, totalItems, requestUrl) => {
   const nextPage = pageNumber + 1
@@ -24,20 +31,21 @@ const getMetaData = (pageNumber, perPage, totalItems, requestUrl) => {
     page: pageNumber,
     ...(pageNumber > 1 &&
       { prevPageLink: `${requestUrl}?page=${prevPage}&perPage=${perPage}` }),
-    nextPageLink: `${requestUrl}?page=${nextPage}&perPage=${perPage}`
+    ...(calculateLimit(pageNumber, perPage) < totalItems &&
+      { nextPageLink: `${requestUrl}?page=${nextPage}&perPage=${perPage}` })
   }
   return metadata
 }
 
-const getComputedItems = (data, offset, limit) => {
-  if (
-    data?.data
-  ) {
-    const { data: originalItemsData } = data
-    const computedItems = originalItemsData.slice(offset, limit)
-    return computedItems
-  }
+const getComputedItems = (items = [], offset, limit) => {
+  const computedItems = items.slice(offset, limit)
+  return computedItems
 }
+
+const getLegacyPaginationItemsPromise = async (cachekey, legacyPageNumber) =>
+  isLegacyPageInCache(cachekey, legacyPageNumber)
+    ? getCache(cachekey)
+    : axios.get(`${LEGACY_PAGINATION_URL}?page=${legacyPageNumber}`)
 
 /**
  *
@@ -60,32 +68,54 @@ async function getItems (req) {
     const isLimitInOtherPage = legacyLimitPageNumber !== legacyOffsetPageNumber
 
     const [legacyPaginationOffsetResponse, legacyPaginationLimitResponse] =
-    await Promise.all([axios.get(
-      `${LEGACY_PAGINATION_URL}?page=${legacyOffsetPageNumber}`
-    ), isLimitInOtherPage
-      ? await axios.get(
-      `${LEGACY_PAGINATION_URL}?page=${legacyLimitPageNumber}`
+    await Promise.all([getLegacyPaginationItemsPromise(
+      OFFSET_LEGACY_PAGE_CACHE_KEY,
+      legacyOffsetPageNumber
+    ),
+    isLimitInOtherPage
+      ? getLegacyPaginationItemsPromise(
+        LIMIT_LEGACY_PAGE_CACHE_KEY,
+        legacyLimitPageNumber
       )
       : null])
 
     const { data } = legacyPaginationOffsetResponse
+    let resultItems = []
 
-    let resultItems = getComputedItems(data,
-      offset % DEFAULT_PER_PAGE_ITEMS,
-      isLimitInOtherPage ? data.data?.length : limit
-    )
+    if (legacyPaginationOffsetResponse) {
+      const { data: originItems = [] } = data
 
+      resultItems = getComputedItems(originItems,
+        offset % DEFAULT_PER_PAGE_ITEMS,
+        isLimitInOtherPage ? originItems.length : limit
+      )
+
+      setCache(OFFSET_LEGACY_PAGE_CACHE_KEY, {
+        data: originItems,
+        legacyPageNumber:
+        legacyOffsetPageNumber
+      })
+    }
+
+    // In case limit item page is different from the offset one
     if (legacyPaginationLimitResponse) {
       const limitMod = limit % DEFAULT_PER_PAGE_ITEMS
-      const legacyLimitItemsOffset = 0
-      const legacyLimitItemsLimit =
+      const limitPageItemsLimit =
         limitMod === 0 ? DEFAULT_PER_PAGE_ITEMS : limitMod
 
+      const { data: originLimitPageItems } =
+        legacyPaginationLimitResponse.data
+
       const limitItems = getComputedItems(
-        legacyPaginationLimitResponse.data,
-        legacyLimitItemsOffset,
-        legacyLimitItemsLimit
+        originLimitPageItems,
+        0,
+        limitPageItemsLimit
       )
+
+      setCache(LIMIT_LEGACY_PAGE_CACHE_KEY, {
+        data: originLimitPageItems,
+        legacyPageNumber: legacyLimitPageNumber
+      })
 
       resultItems = [...resultItems, ...limitItems]
     }
@@ -102,6 +132,7 @@ async function getItems (req) {
           originMetadata.totalItems,
           getRequestUrl(req)
         )
+      setCache(OFFSET_LEGACY_PAGE_CACHE_KEY, { metadata })
     }
 
     const response = {
@@ -111,8 +142,11 @@ async function getItems (req) {
 
     return response
   } catch (err) {
-    console.error('[service/items]Error getting items:', err.message)
-    throw new Error('[service/items]Error getting items:', err.message)
+    console.error('[service/items]:Error getting items:',
+      err.message,
+      err.stack
+    )
+    throw new Error('[service/items]:Error getting items:', err.message)
   }
 }
 
