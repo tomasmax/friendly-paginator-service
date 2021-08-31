@@ -7,6 +7,7 @@ const {
 } = require('../cache/inMemory')
 
 const DEFAULT_PER_PAGE_ITEMS = 100
+const MAX_PER_PAGE_ITEMS = 200
 const LEGACY_PAGINATION_URL = 'https://sf-legacy-api.vercel.app/items'
 const OFFSET_LEGACY_PAGE_CACHE_KEY = 'offset'
 const LIMIT_LEGACY_PAGE_CACHE_KEY = 'limit'
@@ -22,7 +23,7 @@ const getLimitLegacyPageNumber = (limit) =>
 
 const getRequestUrl = (req) => `${req.protocol}://${req.hostname}${req.baseUrl}`
 
-const getMetaData = (pageNumber, perPage, totalItems, requestUrl) => {
+const getMetaData = (pageNumber, perPage, totalItems, requestUrl, warning) => {
   const nextPage = pageNumber + 1
   const prevPage = pageNumber - 1
   const metadata = {
@@ -32,7 +33,8 @@ const getMetaData = (pageNumber, perPage, totalItems, requestUrl) => {
     ...(pageNumber > 1 &&
       { prevPageLink: `${requestUrl}?page=${prevPage}&perPage=${perPage}` }),
     ...(calculateLimit(pageNumber, perPage) < totalItems &&
-      { nextPageLink: `${requestUrl}?page=${nextPage}&perPage=${perPage}` })
+      { nextPageLink: `${requestUrl}?page=${nextPage}&perPage=${perPage}` }),
+    ...(warning && { warning })
   }
   return metadata
 }
@@ -57,7 +59,13 @@ async function getItems (req) {
     const { page = 1, perPage = DEFAULT_PER_PAGE_ITEMS } = req.query
 
     const pageNumber = parseInt(page)
-    const perPageNumber = parseInt(perPage)
+    let perPageNumber = parseInt(perPage)
+    let warning
+
+    if (perPage > MAX_PER_PAGE_ITEMS) {
+      perPageNumber = MAX_PER_PAGE_ITEMS
+      warning = 'Max perPage items is 200'
+    }
 
     const offset = calculateOffset(pageNumber, perPageNumber)
     const limit = calculateLimit(pageNumber, perPageNumber)
@@ -128,9 +136,10 @@ async function getItems (req) {
       const { metadata: originMetadata } = data
       metadata =
         getMetaData(pageNumber,
-          perPage,
+          perPageNumber,
           originMetadata.totalItems,
-          getRequestUrl(req)
+          getRequestUrl(req),
+          warning
         )
       setCache(OFFSET_LEGACY_PAGE_CACHE_KEY, { metadata })
     }
@@ -142,10 +151,7 @@ async function getItems (req) {
 
     return response
   } catch (err) {
-    console.error('[service/items]:Error getting items:',
-      err.message,
-      err.stack
-    )
+    console.error('[service/items]:Error getting items:', err.message)
     throw new Error('[service/items]:Error getting items:', err.message)
   }
 }

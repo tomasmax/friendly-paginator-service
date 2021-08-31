@@ -131,4 +131,17 @@ describe('Controllers/items', () => {
 
     expect(cachedPerformance).toBeLessThanOrEqual(performance1)
   })
+
+  it('Should throw a 400 if page or perPage queryParams are not numbers', async () => {
+    const queryParams = {
+      page: 'NaN',
+      perPage: 'NaN'
+    }
+
+    const response = await request.get(
+      `${itemsApiPath}?${querystring.stringify(queryParams)}`
+    )
+
+    expect(response.status).toBe(400)
+  })
 })

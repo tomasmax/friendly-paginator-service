@@ -1,3 +1,5 @@
+'use strict'
+
 let cache = {}
 
 const setCache = (cacheKey, { data, metadata, legacyPageNumber }) => {
