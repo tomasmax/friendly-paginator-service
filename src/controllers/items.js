@@ -6,7 +6,8 @@ async function getItems (req, res, next) {
   try {
     const { page, perPage } = req.query
 
-    if (isNaN(parseInt(page)) || isNaN(parseInt(perPage))) {
+    if ((page && isNaN(parseInt(page))) ||
+    (perPage && isNaN(parseInt(perPage)))) {
       throw new BadRequest('page or perPage params are not numbers')
     }
 
